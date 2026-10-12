@@ -81,7 +81,7 @@ allows new entries between queries without rebuilding the index:
 
 ```ruby
 factory = RGeo::Geos.factory(native_interface: :capi)
-tree = RGeo::Cartesian::RTree.new(factory)
+tree = RGeo::Cartesian::RTree.new
 tree.insert(factory.point(1, 2), :feature_a)
 tree.query(factory.point(1, 2)) # => [:feature_a]
 tree.insert(factory.point(10, 20), :feature_b)
@@ -89,11 +89,12 @@ tree.query(factory.point(10, 20)) # => [:feature_b]
 ```
 
 The tree works with simple Cartesian and GEOS CAPI/FFI factories, without
-requiring a native indexing dependency. Inputs must use the same Cartesian
-factory object; no conversion or reprojection is performed. Empty geometry
-insertion is rejected, while an empty query returns an empty array. Z and M
-are ignored. `max_entries:` controls node capacity (an integer of at least 4,
-default 16); `size` counts inserted entries, including duplicates.
+requiring a native indexing dependency. The first successful insertion infers
+the Cartesian factory; subsequent inputs must use that same factory object.
+Queries on an empty tree do not bind a factory. No conversion or reprojection
+is performed. Empty geometry insertion is rejected; empty queries return an
+empty array. Z and M are ignored. `max_entries:` controls node capacity (an
+integer of at least 4, default 16); `size` includes duplicate entries.
 
 Results are unordered items whose bounding boxes intersect the query envelope,
 not exact geometry intersections or similarity matches. Compare candidates

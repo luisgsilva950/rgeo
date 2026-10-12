@@ -5,7 +5,7 @@ require_relative "test_helper"
 class CartesianRTreeTest < Minitest::Test # :nodoc:
   def setup
     @factory = RGeo::Cartesian.simple_factory
-    @tree = RGeo::Cartesian::RTree.new(@factory, max_entries: 4)
+    @tree = RGeo::Cartesian::RTree.new(max_entries: 4)
   end
 
   def test_queries_and_insertions_remain_interleavable_through_splits
@@ -76,17 +76,34 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     assert_empty(@tree.query(@factory.point(7, 4)))
   end
 
-  def test_constructor_rejects_noncartesian_and_invalid_factories
-    factories = [nil, Object.new, @factory.point(0, 0),
-                 RGeo::Geographic.spherical_factory, RGeo::Geographic.simple_mercator_factory]
-    factories.each do |factory|
-      assert_raises(ArgumentError) { RGeo::Cartesian::RTree.new(factory) }
-    end
+  def test_noncartesian_geometries_are_rejected_before_binding_a_factory
+    geometry = RGeo::Geographic.spherical_factory.point(0, 0)
+    assert_raises(ArgumentError) { @tree.insert(geometry, :invalid) }
+    assert_raises(ArgumentError) { @tree.query(geometry) }
+    @tree.insert(@factory.point(0, 0), :valid)
+    assert_equal([:valid], @tree.query(@factory.point(0, 0)))
+  end
+
+  def test_empty_queries_and_failed_insertions_do_not_establish_a_factory
+    other = RGeo::Cartesian.simple_factory(srid: 4326)
+    assert_empty(@tree.query(other.point(0, 0)))
+    assert_empty(@tree.query(other.collection([])))
+    assert_raises(ArgumentError) { @tree.insert(other.collection([]), :invalid) }
+    @tree.insert(@factory.point(1, 2), :valid)
+    assert_equal([:valid], @tree.query(@factory.point(1, 2)))
+    assert_raises(ArgumentError) { @tree.query(other.point(1, 2)) }
+  end
+
+  def test_frozen_empty_tree_can_query_different_cartesian_factories
+    @tree.freeze
+    assert_empty(@tree.query(@factory.point(0, 0)))
+    other = RGeo::Cartesian.simple_factory(srid: 4326)
+    assert_empty(@tree.query(other.point(0, 0)))
   end
 
   def test_constructor_rejects_invalid_capacities
     [nil, false, "4", 4.0, -1, 0, 1, 2, 3].each do |capacity|
-      assert_raises(ArgumentError) { RGeo::Cartesian::RTree.new(@factory, max_entries: capacity) }
+      assert_raises(ArgumentError) { RGeo::Cartesian::RTree.new(max_entries: capacity) }
     end
   end
 
@@ -175,7 +192,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
 
   def assert_random_queries(factory, capacity = 4)
     random = Random.new(72_041)
-    tree = RGeo::Cartesian::RTree.new(factory, max_entries: capacity)
+    tree = RGeo::Cartesian::RTree.new(max_entries: capacity)
     entries = []
     assert_empty(tree.query(factory.point(0, 0)))
     96.times do |item|
@@ -193,7 +210,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
   end
 
   def assert_xy_only(factory)
-    tree = RGeo::Cartesian::RTree.new(factory, max_entries: 4)
+    tree = RGeo::Cartesian::RTree.new(max_entries: 4)
     24.times { |index| tree.insert(factory.point(index, index, index * 100, -index * 100), index) }
     query = factory.line_string([factory.point(5, 5, -10_000, 10_000), factory.point(10, 10, -9_000, 9_000)])
 

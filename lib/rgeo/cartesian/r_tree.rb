@@ -11,29 +11,26 @@ module RGeo
     # are captured on insertion, so geometries need not be retained. Items are
     # retained by identity, and repeated insertions remain separate entries.
     #
-    # All geometries must belong to the exact factory object supplied when the
-    # tree is created. No factory conversion or coordinate transformation occurs.
+    # The first successful insertion establishes the factory. Subsequent inputs
+    # must use that same factory object; no conversion or reprojection occurs.
     # Instances cannot be duplicated or cloned. Freezing prevents insertion but
     # still permits queries. Concurrent mutation requires external synchronization.
     class RTree
       # Returns the number of inserted entries, including duplicates.
       attr_reader :size
 
-      # Creates an empty tree for a factory guaranteeing Cartesian coordinates.
+      # Creates an empty tree. Its factory is inferred from the first insertion.
       # +max_entries+ is the maximum number of entries per node (default 16).
       # It must be an Integer of at least 4. Non-root nodes contain at least
       # +max_entries / 2+ entries, and all leaves have the same depth.
       #
-      # Raises ArgumentError for an invalid factory or node capacity.
-      def initialize(factory, max_entries: 16)
-        unless factory.is_a?(Feature::Factory::Instance) && factory.property(:is_cartesian) == true
-          raise ArgumentError, "factory must guarantee Cartesian coordinates"
-        end
+      # Raises ArgumentError for an invalid node capacity.
+      def initialize(max_entries: 16)
         unless max_entries.is_a?(Integer) && max_entries >= 4
           raise ArgumentError, "max_entries must be an Integer of at least 4"
         end
 
-        @factory = factory
+        @factory = nil
         @max_entries = max_entries
         @min_entries = max_entries / 2
         @root = Node.new(true)
@@ -59,6 +56,7 @@ module RGeo
           root.add(sibling)
           @root = root
         end
+        @factory ||= geometry.factory
         @size += 1
         self
       end
@@ -134,8 +132,7 @@ module RGeo
 
         def initialize(leaf)
           @leaf = leaf
-          @entries = []
-          @bounds = nil
+          reset
         end
 
         def add(entry)
@@ -161,15 +158,21 @@ module RGeo
       end
 
       def geometry_bounds(geometry)
-        unless Feature::Geometry === geometry && geometry.factory.equal?(@factory)
-          raise ArgumentError, "geometry must belong to this tree's factory"
-        end
+        raise ArgumentError, "expected a Cartesian geometry" unless Feature::Geometry === geometry
+
+        factory = geometry.factory
+        compatible = if @factory
+                       factory.equal?(@factory)
+                     else
+                       factory.is_a?(Feature::Factory::Instance) && factory.property(:is_cartesian) == true
+                     end
+        raise ArgumentError, "expected a Cartesian geometry from this tree's factory" unless compatible
         return if geometry.empty?
 
         # Native envelopes avoid materializing every vertex in Ruby. The simple
         # factory already computes envelopes with BoundingBox, so use it directly.
-        source = @factory.is_a?(Factory) ? geometry : geometry.envelope
-        box = BoundingBox.new(@factory, ignore_z: true, ignore_m: true).add_geometry(source)
+        source = factory.is_a?(Factory) ? geometry : geometry.envelope
+        box = BoundingBox.new(factory, ignore_z: true, ignore_m: true).add_geometry(source)
         coordinates = [box.min_x, box.min_y, box.max_x, box.max_y]
         unless coordinates.all? { |coordinate| coordinate&.finite? }
           raise ArgumentError, "geometry must have finite XY bounds"
@@ -192,20 +195,28 @@ module RGeo
       end
 
       def choose_subtree(node, bounds)
-        best = nil
-        best_growth = best_area = best_count = nil
+        best = best_growth = nil
         node.entries.each do |child|
-          area = child.bounds.area
-          growth = child.bounds.union_area(bounds) - area
-          count = child.entries.size
-          next unless !best || growth < best_growth ||
-             (growth == best_growth && (area < best_area || (area == best_area && count < best_count)))
+          growth = child.bounds.union_area(bounds) - child.bounds.area
+          next unless prefer_node?(child, best, growth, best_growth)
+
           best = child
           best_growth = growth
-          best_area = area
-          best_count = count
         end
         best
+      end
+
+      # Both descent and splitting prefer less enlargement, then smaller area
+      # and fewer entries. Exact ties retain the first candidate.
+      def prefer_node?(candidate, current, growth, current_growth)
+        return true unless current
+        return growth < current_growth unless growth == current_growth
+
+        area = candidate.bounds.area
+        current_area = current.bounds.area
+        return area < current_area unless area == current_area
+
+        candidate.entries.size < current.entries.size
       end
 
       # Guttman's quadratic split: choose the pair wasting the most bounding
@@ -232,15 +243,8 @@ module RGeo
 
           index, left_growth, right_growth = split_next(remaining, node.bounds, sibling.bounds)
           entry = remaining.delete_at(index)
-          left_area = node.bounds.area
-          right_area = sibling.bounds.area
-          if left_growth < right_growth ||
-             (left_growth == right_growth &&
-              (left_area < right_area || (left_area == right_area && node.entries.size <= sibling.entries.size)))
-            node.add(entry)
-          else
-            sibling.add(entry)
-          end
+          target = prefer_node?(sibling, node, right_growth, left_growth) ? sibling : node
+          target.add(entry)
         end
         sibling
       end
