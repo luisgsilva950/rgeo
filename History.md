@@ -1,5 +1,9 @@
 ### Unreleased
 
+**Minor Changes**
+
+* Add `RGeo::Cartesian::RTree`, a dynamic two-dimensional spatial index supporting interleaved insertions and envelope queries.
+
 **Bug Fixes**
 
 * Add a `:precision` option for `simple_factory` instances to reduce invalid self-intersection issues

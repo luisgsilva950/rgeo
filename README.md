@@ -73,6 +73,36 @@ If you are using proj.4 extensions, include
 gem "rgeo-proj4"
 ```
 
+### Dynamic spatial indexing
+
+`RGeo::Cartesian::RTree` is an in-memory, two-dimensional R-tree implemented
+in Ruby. It uses least-enlargement insertion and quadratic node splits, and
+allows new entries between queries without rebuilding the index:
+
+```ruby
+factory = RGeo::Geos.factory(native_interface: :capi)
+tree = RGeo::Cartesian::RTree.new(factory)
+tree.insert(factory.point(1, 2), :feature_a)
+tree.query(factory.point(1, 2)) # => [:feature_a]
+tree.insert(factory.point(10, 20), :feature_b)
+tree.query(factory.point(10, 20)) # => [:feature_b]
+```
+
+The tree works with simple Cartesian and GEOS CAPI/FFI factories, without
+requiring a native indexing dependency. Inputs must use the same Cartesian
+factory object; no conversion or reprojection is performed. Empty geometry
+insertion is rejected, while an empty query returns an empty array. Z and M
+are ignored. `max_entries:` controls node capacity (an integer of at least 4,
+default 16); `size` counts inserted entries, including duplicates.
+
+Results are unordered items whose bounding boxes intersect the query envelope,
+not exact geometry intersections or similarity matches. Compare candidates
+separately, and expand the query geometry when a positional tolerance is needed.
+The tree snapshots each bounding box and retains its associated item. It
+supports insertion and envelope queries, not removal or nearest-neighbor search.
+Freezing prevents insertion but permits queries; duplication is not supported.
+Concurrent mutation requires external synchronization.
+
 ### Upgrading to Version 3.0
 
 See [doc/Upgrading-to-v3.md](doc/Upgrading-to-v3.md) for a checklist of changes to make before upgrading to RGeo 3.0.
