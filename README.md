@@ -99,10 +99,27 @@ integer of at least 4, default 16); `size` includes duplicate entries.
 Results are unordered items whose bounding boxes intersect the query envelope,
 not exact geometry intersections or similarity matches. Compare candidates
 separately, and expand the query geometry when a positional tolerance is needed.
-The tree snapshots each bounding box and retains its associated item. It
-supports insertion and envelope queries, not removal or nearest-neighbor search.
-Freezing prevents insertion but permits queries; duplication is not supported.
-Concurrent mutation requires external synchronization.
+The tree snapshots each bounding box and retains its original geometry and
+associated item. It supports insertion and spatial queries, not removal or
+nearest-neighbor search. Freezing prevents insertion but permits queries;
+duplication is not supported. Concurrent mutation requires external synchronization.
+
+To recover the geometries with their labels, use `query_intersections`:
+
+```ruby
+point = factory.point(1, 2)
+tree = RGeo::Cartesian::RTree.new
+tree.insert(point, :feature_a)
+tree.query_intersections(factory.point(1, 2)) # => { feature_a: point }
+```
+
+This method prunes bounding-box candidates and checks `intersects?`, returning
+the original indexed geometries, not clipped intersection geometries. It
+requires a backend supporting the exact predicate, such as GEOS CAPI/FFI.
+Empty results return `{}`. Items are used as Hash keys (labels): distinct
+matching geometries with equal labels raise `ArgumentError` rather than lose
+a result. Repeated entries for the same label and geometry collapse into one
+mapping. Keep labels stable while indexed.
 
 ### Upgrading to Version 3.0
 

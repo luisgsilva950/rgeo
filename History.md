@@ -2,7 +2,7 @@
 
 **Minor Changes**
 
-* Add `RGeo::Cartesian::RTree`, a dynamic two-dimensional spatial index with factory inference, quadratic splits, and interleaved insertions and envelope queries.
+* Add `RGeo::Cartesian::RTree`, a dynamic two-dimensional index with factory inference, quadratic splits, candidate item queries, and exact label-to-geometry intersection queries.
 
 **Bug Fixes**
 

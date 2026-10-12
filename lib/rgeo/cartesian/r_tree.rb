@@ -5,11 +5,10 @@ module RGeo
     # A dynamic, two-dimensional R-tree for Cartesian geometries. Inserts may
     # be interleaved with queries; neither operation builds or seals the tree.
     #
-    # Queries return items whose stored XY bounding boxes intersect the query's
-    # bounding box, including boundary contact. These are candidates, not exact
-    # geometry intersections. Z and M coordinates are ignored. Bounding boxes
-    # are captured on insertion, so geometries need not be retained. Items are
-    # retained by identity, and repeated insertions remain separate entries.
+    # #query returns bounding-box candidates; #query_intersections returns an
+    # exact label-to-geometry map. Bounds are snapshotted on insertion; original
+    # geometries and associated items (labels) are retained by identity.
+    # Indexing is XY-only. Repeated insertions remain separate entries.
     #
     # The first successful insertion establishes the factory. Subsequent inputs
     # must use that same factory object; no conversion or reprojection occurs.
@@ -49,7 +48,7 @@ module RGeo
         bounds = geometry_bounds(geometry)
         raise ArgumentError, "cannot insert an empty geometry" unless bounds
 
-        sibling = insert_entry(@root, Entry.new(bounds, item))
+        sibling = insert_entry(@root, Entry.new(bounds, geometry, item))
         if sibling
           root = Node.new(false)
           root.add(@root)
@@ -69,22 +68,27 @@ module RGeo
       # Raises ArgumentError for a non-geometry, a geometry from another
       # factory, or non-finite XY bounds.
       def query(geometry)
-        bounds = geometry_bounds(geometry)
         results = []
-        return results unless bounds && @root.bounds&.intersects?(bounds)
+        each_candidate(geometry) { |entry| results << entry.item }
+        results
+      end
 
-        pending = [@root]
-        until pending.empty?
-          node = pending.pop
-          node.entries.each do |entry|
-            next unless entry.bounds.intersects?(bounds)
+      # Returns a Hash mapping labels to original indexed geometries that
+      # intersect +geometry+, using bounding-box pruning then +intersects?+.
+      # Requires an implementation supporting that exact predicate.
+      # Empty queries return {}. Repeated entries for the same label and geometry
+      # collapse; distinct matching geometries with equal labels raise ArgumentError.
+      # Labels use Ruby Hash equality and must remain stable while indexed.
+      # Input validation is identical to #query; queries never seal the tree.
+      def query_intersections(geometry)
+        results = {}
+        each_candidate(geometry) do |entry|
+          next unless entry.geometry.intersects?(geometry)
 
-            if node.leaf
-              results << entry.item
-            else
-              pending << entry
-            end
+          if results.key?(entry.item) && !results[entry.item].equal?(entry.geometry)
+            raise ArgumentError, "intersecting geometries must have distinct labels"
           end
+          results[entry.item] = entry.geometry
         end
         results
       end
@@ -150,11 +154,30 @@ module RGeo
         end
       end
 
-      Entry = Struct.new(:bounds, :item)
+      Entry = Struct.new(:bounds, :geometry, :item)
       private_constant :Bounds, :Node, :Entry
 
       def initialize_copy(_other)
         raise TypeError, "#{self.class} cannot be copied"
+      end
+
+      def each_candidate(geometry)
+        bounds = geometry_bounds(geometry)
+        return unless bounds && @root.bounds&.intersects?(bounds)
+
+        pending = [@root]
+        until pending.empty?
+          node = pending.pop
+          node.entries.each do |entry|
+            next unless entry.bounds.intersects?(bounds)
+
+            if node.leaf
+              yield entry
+            else
+              pending << entry
+            end
+          end
+        end
       end
 
       def geometry_bounds(geometry)

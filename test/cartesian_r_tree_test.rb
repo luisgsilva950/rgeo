@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "weakref"
 
 class CartesianRTreeTest < Minitest::Test # :nodoc:
   def setup
@@ -55,12 +56,16 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     empties = [@factory.collection([]), @factory.multi_point([]), @factory.line_string([])]
     empties.each do |geometry|
       assert_empty(@tree.query(geometry))
+      assert_empty(@tree.query_intersections(geometry))
       assert_raises(ArgumentError) { @tree.insert(geometry, :empty) }
     end
     assert_equal(0, @tree.size)
 
     @tree.insert(@factory.point(0, 0), :origin)
-    empties.each { |geometry| assert_empty(@tree.query(geometry)) }
+    empties.each do |geometry|
+      assert_empty(@tree.query(geometry))
+      assert_empty(@tree.query_intersections(geometry))
+    end
     assert_equal([:origin], @tree.query(@factory.point(0, 0)))
     assert_equal(1, @tree.size)
   end
@@ -92,6 +97,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     @tree.insert(@factory.point(1, 2), :valid)
     assert_equal([:valid], @tree.query(@factory.point(1, 2)))
     assert_raises(ArgumentError) { @tree.query(other.point(1, 2)) }
+    assert_raises(ArgumentError) { @tree.query_intersections(other.point(1, 2)) }
   end
 
   def test_frozen_empty_tree_can_query_different_cartesian_factories
@@ -99,6 +105,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     assert_empty(@tree.query(@factory.point(0, 0)))
     other = RGeo::Cartesian.simple_factory(srid: 4326)
     assert_empty(@tree.query(other.point(0, 0)))
+    assert_empty(@tree.query_intersections(other.point(0, 0)))
   end
 
   def test_constructor_rejects_invalid_capacities
@@ -117,6 +124,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     incompatible.each do |geometry|
       assert_raises(ArgumentError) { @tree.insert(geometry, :invalid) }
       assert_raises(ArgumentError) { @tree.query(geometry) }
+      assert_raises(ArgumentError) { @tree.query_intersections(geometry) }
     end
     assert_equal(1, @tree.size)
     assert_equal([:origin], @tree.query(@factory.point(0, 0)))
@@ -155,6 +163,15 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     assert_equal([:item], @tree.query(@factory.point(1, 1)))
   end
 
+  def test_indexed_geometries_survive_garbage_collection
+    skip "Needs GEOS CAPI." unless RGeo::Geos.capi_supported?
+    @factory = RGeo::Geos.factory(native_interface: :capi)
+    reference = insert_weak_geometry
+    GC.start
+    assert(reference.weakref_alive?)
+    assert_same(reference.__getobj__, @tree.query_intersections(@factory.point(1, 2)).fetch(:retained))
+  end
+
   def test_simple_zm_factory_ignores_z_and_m_for_overlap
     assert_xy_only(RGeo::Cartesian.simple_factory(has_z_coordinate: true, has_m_coordinate: true))
   end
@@ -163,6 +180,7 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     skip "Needs GEOS CAPI." unless RGeo::Geos.capi_supported?
 
     assert_random_queries(RGeo::Geos.factory(native_interface: :capi))
+    assert_labeled_intersections(RGeo::Geos.factory(native_interface: :capi))
     assert_xy_only(RGeo::Geos.factory(native_interface: :capi, has_z_coordinate: true, has_m_coordinate: true))
   end
 
@@ -170,10 +188,41 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     skip "Needs GEOS FFI." unless RGeo::Geos.ffi_supported?
 
     assert_random_queries(RGeo::Geos.factory(native_interface: :ffi))
+    assert_labeled_intersections(RGeo::Geos.factory(native_interface: :ffi))
     assert_xy_only(RGeo::Geos.factory(native_interface: :ffi, has_z_coordinate: true, has_m_coordinate: true))
   end
 
   private
+
+  def assert_labeled_intersections(factory)
+    tree = RGeo::Cartesian::RTree.new(max_entries: 4)
+    triangle = factory.parse_wkt("POLYGON ((0 0, 10 0, 0 10, 0 0))")
+    tree.insert(triangle, :triangle)
+    search = factory.point(9, 9)
+    assert_equal([:triangle], tree.query(search))
+    assert_empty(tree.query_intersections(search))
+    points = Array.new(40) { |index| factory.point(index, index) }
+    points.each_with_index { |point, index| tree.insert(point, index) }
+    window = factory.parse_wkt("POLYGON ((15 15, 20 15, 20 20, 15 20, 15 15))")
+    expected = (15..20).to_h { |index| [index, points[index]] }
+    results = tree.query_intersections(window)
+    assert_equal(expected.keys.sort, results.keys.sort)
+    expected.each { |label, point| assert_same(point, results.fetch(label)) }
+    tree.insert(points[15], 15)
+    assert_equal(expected, tree.query_intersections(window))
+    later = factory.point(16, 16)
+    tree.insert(later, :late)
+    assert_same(later, tree.query_intersections(window).fetch(:late))
+    tree.insert(factory.point(16, 16), 15)
+    assert_raises(ArgumentError) { tree.query_intersections(window) }
+    assert_equal([:triangle], tree.query(factory.point(0, 10)))
+  end
+
+  def insert_weak_geometry
+    geometry = @factory.point(1, 2)
+    @tree.insert(geometry, :retained)
+    WeakRef.new(geometry)
+  end
 
   def box(factory, bounds)
     min_x, min_y, max_x, max_y = bounds
