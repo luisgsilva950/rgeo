@@ -9,7 +9,7 @@ Please ask questions about how to use the library on
 
 ## Did you find a bug?
 
-* Ensure the bug was not already reported by searching [Issues](https://githhub.com/rgeo/rgeo/issues).
+* Ensure the bug was not already reported by searching [Issues](https://github.com/rgeo/rgeo/issues).
 
 * If you're unable to find an open issue addressing the problem,
 [open a new one](https://github.com/rgeo/rgeo/issues).
@@ -23,12 +23,21 @@ and a code sample demonstrating the expected behavior that is not occurring.
 * Ensure the PR description clearly describes the problem and solution.
 Include the relevant issue number if applicable.
 
+* Add an entry to `History.md` describing your contribution.
+
+* Ensure the pull request's CI checks pass. Fork contributions may require a
+maintainer to approve the GitHub Actions run before checks can start.
+
 ## How to set up a development environment:
 
 ##### Fork the repo:
 
+Fork the repository on GitHub, then clone your fork and add the original repository as upstream:
+
 ```sh
-git clone git@github.com:rgeo/rgeo.git
+git clone git@github.com:YOUR_USERNAME/rgeo.git
+cd rgeo
+git remote add upstream https://github.com/rgeo/rgeo.git
 ```
 
 ##### Install gem dependencies:
@@ -61,6 +70,6 @@ have extra information when compiling.
 ##### Check that your code style is OK
 
 ```sh
-rubocop
-bin/clang-format
+bundle exec rubocop
+bin/clang-format lint
 ```

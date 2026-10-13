@@ -11,7 +11,6 @@
 * Fix Cartesian bounding-box dimension-option forwarding, preserve M when ignoring Z, include polygon interior-ring Z/M extents, and return false for empty-box degeneracy predicates.
 * Fix WKB byte scanning for multibyte-encoded binary strings and preserve M coordinates when parsing into ZM factories.
 * Reject malformed hexadecimal WKB and unsupported EWKB/WKB12 type encodings.
-* Check factory compatibility documentation against runtime capabilities without rewriting the file or depending on Git state.
 * Add a `:precision` option for `simple_factory` instances to reduce invalid self-intersection issues
 * Add a new tests to validate `simple_factory` polygons with non-integer vertices
 

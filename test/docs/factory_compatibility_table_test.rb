@@ -2,18 +2,31 @@
 
 require_relative "../test_helper"
 
-# Ensure that the documented compatibility table matches runtime capabilities.
+# Ensure that compatiblity table stays up to date. If this test fails
+# and your diff shows a checkmark instead of a red X, thanks for adding
+# that feature ! Otherwise, please take a look at your contribution.
 class FactoryCompatibilityTableTest < Minitest::Test # :nodoc:
   def test_table_ok
     unless RGeo::Geos.ffi_supported? && RGeo::Geos.capi_supported?
       skip "Factory Compatibility table can only be generated with FFI and CAPI support"
     end
 
-    generated = generate_markdown(compute_handled_methods_per_factory)
-    documented = File.readlines(compatility_table_path).drop_while do |line|
-      !line.start_with?("<!-- AUTO-GENERATED")
-    end.drop(1).join
-    assert_equal(generated, documented)
+    update_table_file(
+      generate_markdown(
+        compute_handled_methods_per_factory
+      )
+    )
+
+    assert(
+      system("git", "diff", "--quiet", "--", compatility_table_path),
+      proc {
+        require "pathname"
+        relative_path = Pathname.new(compatility_table_path)
+                                .relative_path_from(Pathname.new(Dir.pwd))
+        "Expected #{relative_path} not to change. Please check if this " \
+          "is intended and then commit changes, or fix otherwise."
+      }
+    )
   end
 
   private
@@ -221,5 +234,16 @@ class FactoryCompatibilityTableTest < Minitest::Test # :nodoc:
       overlaps?
       relate?
     ].freeze
+  end
+
+  def update_table_file(html)
+    File.open(compatility_table_path, "r+") do |file|
+      file.take_while { |line| !line.start_with?("<!-- AUTO-GENERATED") }
+      file.puts html
+      # Remove lines below.
+      file.truncate file.pos
+    end
+
+    debug "doc/Factory-compatibility.md edited."
   end
 end
