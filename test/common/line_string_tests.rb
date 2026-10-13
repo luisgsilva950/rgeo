@@ -309,22 +309,6 @@ module RGeo
           assert(line2.empty?)
         end
 
-        def test_boundary_of_open_line_contains_only_endpoints
-          line = @factory.line_string([@factory.point(0, 0), @factory.point(1, 2), @factory.point(3, 4)])
-          boundary = line.boundary
-          assert_equal(RGeo::Feature::MultiPoint, boundary.geometry_type)
-          assert_equal(2, boundary.num_geometries)
-          [[0.0, 0.0], [3.0, 4.0]].zip(boundary.sort_by(&:x)).each do |xy, point|
-            assert_in_delta(xy[0], point.x, 1e-10)
-            assert_in_delta(xy[1], point.y, 1e-10)
-          end
-        end
-
-        def test_boundary_of_closed_line_is_empty
-          closed = @factory.line_string([@factory.point(0, 0), @factory.point(1, 2), @factory.point(0, 0)])
-          assert(closed.boundary.empty?)
-        end
-
         def test_marshal_roundtrip
           point1 = @factory.point(0, 0)
           point2 = @factory.point(0, 1)

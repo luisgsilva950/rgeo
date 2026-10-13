@@ -111,7 +111,7 @@ module RGeo
         hash.each do |_hval, data_|
           array << data_[0] if data_[1].odd?
         end
-        factory.multi_point(array)
+        factory.multipoint([array])
       end
 
       def coordinates
@@ -127,7 +127,7 @@ module RGeo
       private
 
       def add_boundary(hash, point)
-        hval = [point.x, point.y]
+        hval = [point.x, point.y].hash
         (hash[hval] ||= [point, 0])[1] += 1
       end
     end

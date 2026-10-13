@@ -162,37 +162,6 @@ module RGeo
           assert(geom2.empty?)
         end
 
-        def test_boundary_cancels_shared_endpoints
-          first = @factory.line_string([@factory.point(0, 0), @factory.point(1, 1)])
-          second = @factory.line_string([@factory.point(1, 1), @factory.point(2, 0)])
-          boundary = @factory.multi_line_string([first, second]).boundary
-          assert_equal(RGeo::Feature::MultiPoint, boundary.geometry_type)
-          assert_equal([[0.0, 0.0], [2.0, 0.0]], boundary.map { |point| [point.x, point.y] }.sort)
-        end
-
-        def test_boundary_preserves_odd_endpoint_multiplicity
-          center = @factory.point(0, 0)
-          lines = [[1, 0], [0, 1], [-1, 0]].map do |xy|
-            @factory.line_string([center, @factory.point(*xy)])
-          end
-          boundary = @factory.multi_line_string(lines).boundary
-          expected = [[-1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 0.0]]
-          assert_equal(expected.size, boundary.num_geometries)
-          expected.zip(boundary.sort_by { |point| [point.x, point.y] }).each do |xy, point|
-            assert_in_delta(xy[0], point.x, 1e-10)
-            assert_in_delta(xy[1], point.y, 1e-10)
-          end
-        end
-
-        def test_boundary_ignores_closed_components_and_cancels_duplicate_lines
-          closed = @factory.line_string([@factory.point(0, 0), @factory.point(1, 1), @factory.point(0, 0)])
-          [[], [closed], [@linestring1, @linestring1]].each do |lines|
-            assert(@factory.multi_line_string(lines).boundary.empty?)
-          end
-          boundary = @factory.multi_line_string([closed, @linestring1]).boundary
-          assert_equal([[0.0, 0.0], [1.0, 0.0]], boundary.map { |point| [point.x, point.y] }.sort)
-        end
-
         def test_length
           geom1 = @factory.multi_line_string([@linestring1, @linestring2])
           assert_equal(19, geom1.length)

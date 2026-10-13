@@ -131,7 +131,7 @@ _Note: This list is not exhaustive of all the methods defined by each factory. T
 |                         `LineString#as_binary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                            `LineString#empty?` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                           `LineString#simple?` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
-|                          `LineString#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
+|                          `LineString#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                       `LineString#convex_hull` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                            `LineString#buffer` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                    `LineString#equals?(Point)` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
@@ -223,7 +223,7 @@ _Note: This list is not exhaustive of all the methods defined by each factory. T
 |                         `LinearRing#as_binary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                            `LinearRing#empty?` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                           `LinearRing#simple?` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
-|                          `LinearRing#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
+|                          `LinearRing#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                       `LinearRing#convex_hull` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                            `LinearRing#buffer` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                    `LinearRing#equals?(Point)` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
@@ -592,7 +592,7 @@ _Note: This list is not exhaustive of all the methods defined by each factory. T
 |                    `MultiLineString#as_binary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                       `MultiLineString#empty?` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
 |                      `MultiLineString#simple?` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
-|                     `MultiLineString#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ✅     |     ✅      |     ✅     |
+|                     `MultiLineString#boundary` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                  `MultiLineString#convex_hull` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |                       `MultiLineString#buffer` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |
 |               `MultiLineString#equals?(Point)` |  ✅   |    ✅    |  ✅  |   ✅    |     ❌     |     ✅      |     ❌     |

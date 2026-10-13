@@ -106,13 +106,7 @@ module RGeo
 
       def parse(data)
         @mutex.synchronize do
-          first_byte = data.getbyte(0)
-          if first_byte && (first_byte.between?(48, 57) || first_byte.between?(65, 70) || first_byte.between?(97, 102))
-            if data.bytesize.odd? || !data.b.match?(/\A[0-9a-fA-F]*\z/)
-              raise Error::ParseError, "Invalid hexadecimal WKB input"
-            end
-            data = [data].pack("H*")
-          end
+          data = [data].pack("H*") if data[0, 1] =~ /[0-9a-fA-F]/
           @cur_has_z = nil
           @cur_has_m = nil
           @cur_srid = nil
@@ -153,9 +147,9 @@ module RGeo
           has_z ||= type_code & 0x80000000 != 0
           has_m ||= type_code & 0x40000000 != 0
           srid = get_integer(little_endian) if type_code & 0x20000000 != 0
-          type_code &= 0x1fffffff
+          type_code &= 0x0fffffff
         end
-        if @support_wkb12 && type_code < 4000
+        if @support_wkb12
           has_z ||= (type_code / 1000) & 1 != 0
           has_m ||= (type_code / 1000) & 2 != 0
           type_code %= 1000
@@ -185,9 +179,8 @@ module RGeo
           @cur_dims = 2 + (@cur_has_z ? 1 : 0) + (@cur_has_m ? 1 : 0)
           @cur_srid = srid
           @cur_factory = @factory_generator.call(srid: @cur_srid, has_z_coordinate: has_z, has_m_coordinate: has_m)
-          @cur_factory_has_z = @cur_factory.property(:has_z_coordinate)
 
-          if @cur_has_z && !@cur_factory_has_z
+          if @cur_has_z && !@cur_factory.property(:has_z_coordinate)
             raise Error::ParseError, "Data has Z coordinates but the factory doesn't have Z coordinates"
           end
 
@@ -198,7 +191,7 @@ module RGeo
         case type_code
         when 1
           coords = get_doubles(little_endian, @cur_dims)
-          point_from_coords(coords)
+          @cur_factory.point(*coords)
         when 2
           parse_line_string(little_endian)
         when 3
@@ -221,17 +214,12 @@ module RGeo
       def parse_line_string(little_endian)
         count = get_integer(little_endian)
         coords = get_doubles(little_endian, @cur_dims * count)
-        @cur_factory.line_string((0...count).map { |i| point_from_coords(coords[@cur_dims * i, @cur_dims]) })
-      end
-
-      def point_from_coords(coords)
-        coords.insert(2, 0) if @cur_has_m && !@cur_has_z && @cur_factory_has_z
-        @cur_factory.point(*coords)
+        @cur_factory.line_string((0...count).map { |i| @cur_factory.point(*coords[@cur_dims * i, @cur_dims]) })
       end
 
       def start_scanner(data)
         @data = data
-        @len = data.bytesize
+        @len = data.length
         @pos = 0
       end
 
@@ -241,14 +229,14 @@ module RGeo
 
       def byte
         raise Error::ParseError, "Not enough bytes left to fulfill 1 byte" if @pos + 1 > @len
-        value = @data.getbyte(@pos)
+        str = @data[@pos, 1]
         @pos += 1
-        value
+        str.unpack1("C")
       end
 
       def get_integer(little_endian)
         raise Error::ParseError, "Not enough bytes left to fulfill 1 integer" if @pos + 4 > @len
-        str = @data.byteslice(@pos, 4)
+        str = @data[@pos, 4]
         @pos += 4
         str.unpack1(little_endian ? "V" : "N")
       end
@@ -256,7 +244,7 @@ module RGeo
       def get_doubles(little_endian, count)
         len = 8 * count
         raise Error::ParseError, "Not enough bytes left to fulfill #{count} doubles" if @pos + len > @len
-        str = @data.byteslice(@pos, len)
+        str = @data[@pos, len]
         @pos += len
         str.unpack("#{little_endian ? 'E' : 'G'}*")
       end
