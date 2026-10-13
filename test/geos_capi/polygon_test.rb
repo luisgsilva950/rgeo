@@ -54,25 +54,19 @@ class GeosPolygonTest < Minitest::Test # :nodoc:
     assert_equal 0, extra.length, "Should only have x/y's on 0 and 10"
   end
 
-  def test_buffer
-    polygon_coordinates = [[0.5527864045000421, 3.776393202250021],
-                           [0.7763932022500211, 4.447213595499958],
-                           [1.4472135954999579, 4.223606797749979],
-                           [2.447213595499958, 2.223606797749979],
-                           [2.223606797749979, 1.5527864045000421],
-                           [1.5527864045000421, 1.776393202250021],
-                           [0.5527864045000421, 3.776393202250021]]
-
-    points_arr = polygon_coordinates.map { |v| @factory.point(v[0], v[1]) }
-    outer_ring = @factory.linear_ring(points_arr)
-    polygon = @factory.polygon(outer_ring)
-
-    point1 = @factory.point(2, 2)
-    point2 = @factory.point(1, 4)
-    line_string = @factory.line_string([point1, point2])
-    polygon2 = line_string.buffer(0.5)
-
-    assert_equal polygon, polygon2
+  def test_line_buffer_covers_the_line_and_respects_distance
+    line = @factory.line_string([@factory.point(2, 2), @factory.point(1, 4)])
+    radius = 0.5
+    buffer = line.buffer(radius)
+    midpoint = @factory.point(1.5, 3)
+    assert(buffer.contains?(midpoint))
+    assert(buffer.contains?(line))
+    assert(buffer.disjoint?(@factory.point(3, 3)))
+    expected_area = 2 * radius * line.length + midpoint.buffer(radius).area
+    assert_in_delta(expected_area, buffer.area, 1e-12)
+    buffer.exterior_ring.points.each do |point|
+      assert_in_delta(radius, point.distance(line), 1e-12)
+    end
   end
 
   def test_simplify_preserve_topology

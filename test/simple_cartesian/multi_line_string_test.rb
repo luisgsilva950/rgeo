@@ -24,6 +24,14 @@ class CartesianMultiLineStringTest < Minitest::Test # :nodoc:
     end
   end
 
+  def test_empty_components_have_no_boundary_without_validity_checks
+    empty = @factory.line_string([])
+    assert(empty.unsafe_boundary.empty?)
+    boundary = @factory.multi_line_string([empty, @linestring1]).unsafe_boundary
+    assert_equal([[0.0, 0.0], [1.0, 0.0]], boundary.map { |point| [point.x, point.y] }.sort)
+    assert(@factory.multi_line_string([empty]).unsafe_boundary.empty?)
+  end
+
   undef_method :test_fully_equal
   undef_method :test_geometrically_equal
   undef_method :test_not_equal

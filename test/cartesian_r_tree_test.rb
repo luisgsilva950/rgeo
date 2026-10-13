@@ -9,6 +9,61 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     @tree = RGeo::Cartesian::RTree.new(max_entries: 4)
   end
 
+  def test_split_queries_for_identical_collinear_and_extreme_bounds
+    distributions = [Array.new(48) { [1, 1, 1, 1] },
+                     Array.new(48) { |index| [index, 0, index, 0] },
+                     Array.new(48) { |index| [index.even? ? -1e308 : 1e308, 0, 1e308, index] }]
+    [4, 5, 16].each do |capacity|
+      distributions.each do |bounds_list|
+        tree = RGeo::Cartesian::RTree.new(max_entries: capacity)
+        bounds_list.each_with_index { |bounds, item| tree.insert(box(@factory, bounds), item) }
+        [[1, 1, 1, 1], [10, 0, 20, 0], [-1e308, -1, 1e308, 50], [100, 100, 101, 101]].each do |bounds|
+          expected = bounds_list.each_index.select { |index| overlaps?(bounds_list[index], bounds) }
+          assert_equal(expected, tree.query(box(@factory, bounds)).sort)
+        end
+        assert_equal(bounds_list.size, tree.size)
+      end
+    end
+  end
+
+  def test_exact_queries_respect_holes_and_keep_false_and_nil_labels
+    skip "Needs GEOS." unless RGeo::Geos.capi_supported? || RGeo::Geos.ffi_supported?
+    %i[capi ffi].each do |backend|
+      next unless RGeo::Geos.public_send("#{backend}_supported?")
+
+      factory = RGeo::Geos.factory(native_interface: backend)
+      tree = RGeo::Cartesian::RTree.new(max_entries: 4)
+      polygon = factory.parse_wkt("POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 2 8, 8 8, 8 2, 2 2))")
+      tree.insert(polygon, nil)
+      point = factory.point(1, 1)
+      tree.insert(point, false)
+      assert_equal([nil], tree.query(factory.point(5, 5)))
+      assert_empty(tree.query_intersections(factory.point(5, 5)))
+      assert_same(polygon, tree.query_intersections(factory.point(2, 5)).fetch(nil))
+      results = tree.query_intersections(point)
+      assert_equal(2, results.size)
+      assert_same(polygon, results.fetch(nil))
+      assert_same(point, results.fetch(false))
+      tree.freeze
+      assert_equal(results, tree.query_intersections(point))
+    end
+  end
+
+  def test_duplicate_labels_only_conflict_when_both_geometries_intersect
+    skip "Needs GEOS CAPI." unless RGeo::Geos.capi_supported?
+    factory = RGeo::Geos.factory(native_interface: :capi)
+    tree = RGeo::Cartesian::RTree.new(max_entries: 4)
+    first = factory.point(0, 0)
+    second = factory.point(10, 10)
+    tree.insert(first, "same".dup).insert(second, "same".dup)
+    assert_same(first, tree.query_intersections(first).fetch("same"))
+    assert_same(second, tree.query_intersections(second).fetch("same"))
+    window = factory.parse_wkt("POLYGON ((-1 -1, 11 -1, 11 11, -1 11, -1 -1))")
+    assert_raises(ArgumentError) { tree.query_intersections(window) }
+    assert_equal(2, tree.size)
+    assert_same(first, tree.query_intersections(first).fetch("same"))
+  end
+
   def test_queries_and_insertions_remain_interleavable_through_splits
     [4, 5, 16].each { |capacity| assert_random_queries(@factory, capacity) }
   end
@@ -68,6 +123,29 @@ class CartesianRTreeTest < Minitest::Test # :nodoc:
     end
     assert_equal([:origin], @tree.query(@factory.point(0, 0)))
     assert_equal(1, @tree.size)
+  end
+
+  def test_collections_of_empty_components_have_empty_bounds
+    factories = [@factory]
+    factories << RGeo::Geos.factory(native_interface: :capi) if RGeo::Geos.capi_supported?
+    factories << RGeo::Geos.factory(native_interface: :ffi) if RGeo::Geos.ffi_supported?
+    factories.each do |factory|
+      tree = RGeo::Cartesian::RTree.new(max_entries: 4)
+      empties = [factory.multi_line_string([factory.line_string([])]),
+                 factory.collection([factory.collection([]), factory.multi_point([])])]
+      empties.each do |empty|
+        assert_empty(tree.query(empty))
+        assert_empty(tree.query_intersections(empty))
+        assert_raises(ArgumentError) { tree.insert(empty, :empty) }
+      end
+      assert_equal(0, tree.size)
+      tree.insert(factory.point(0, 0), :origin)
+      empties.each do |empty|
+        assert_empty(tree.query(empty))
+        assert_empty(tree.query_intersections(empty))
+      end
+      assert_equal([:origin], tree.query(factory.point(0, 0)))
+    end
   end
 
   def test_nonempty_nested_collections_include_all_components

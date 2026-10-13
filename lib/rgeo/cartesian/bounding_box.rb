@@ -116,13 +116,13 @@ module RGeo
         @min_x.nil?
       end
 
-      # Returns true if this bounding box is degenerate. That is,
+      # Returns true if this bounding box is infinitesimal. That is,
       # it is nonempty but contains only a single point because both
       # the X and Y spans are 0. Infinitesimal boxes are also
       # always degenerate.
 
       def infinitesimal?
-        @min_x && @min_x == @max_x && @min_y == @max_y
+        !empty? && @min_x == @max_x && @min_y == @max_y
       end
 
       # Returns true if this bounding box is degenerate. That is,
@@ -130,7 +130,7 @@ module RGeo
       # of the X or Y spans are 0.
 
       def degenerate?
-        @min_x && (@min_x == @max_x || @min_y == @max_y)
+        !empty? && (@min_x == @max_x || @min_y == @max_y)
       end
 
       # Returns the midpoint X, or nil if this bounding box is empty.
@@ -196,8 +196,8 @@ module RGeo
         return unless @min_x
 
         extras = []
-        extras << @min_z if @has_z
-        extras << @min_m if @has_m
+        extras << @min_z.to_f if @factory.property(:has_z_coordinate)
+        extras << @min_m.to_f if @factory.property(:has_m_coordinate)
 
         @factory.point(@min_x, @min_y, *extras)
       end
@@ -209,8 +209,8 @@ module RGeo
         return unless @min_x
 
         extras = []
-        extras << @max_z if @has_z
-        extras << @max_m if @has_m
+        extras << @max_z.to_f if @factory.property(:has_z_coordinate)
+        extras << @max_m.to_f if @factory.property(:has_m_coordinate)
 
         @factory.point(@max_x, @max_y, *extras)
       end
@@ -240,29 +240,20 @@ module RGeo
       # one of the two spans is 0) or a polygon (if neither span is 0).
 
       def to_geometry
-        if @min_x
-          extras = []
-          extras << @min_z if @has_z
-          extras << @min_m if @has_m
-          point_min = @factory.point(@min_x, @min_y, *extras)
-          if infinitesimal?
-            point_min
-          else
-            extras = []
-            extras << @max_z if @has_z
-            extras << @max_m if @has_m
-            point_max = @factory.point(@max_x, @max_y, *extras)
-            if degenerate?
-              @factory.line(point_min, point_max)
-            else
-              @factory.polygon(@factory.linear_ring([point_min,
-                                                     @factory.point(@max_x, @min_y, *extras), point_max,
-                                                     @factory.point(@min_x, @max_y, *extras), point_min]))
-            end
-          end
-        else
-          @factory.collection([])
-        end
+        return @factory.collection([]) if empty?
+
+        point_min = min_point
+        return point_min if infinitesimal?
+
+        point_max = max_point
+        return @factory.line(point_min, point_max) if degenerate?
+
+        extras = []
+        extras << point_max.z if @factory.property(:has_z_coordinate)
+        extras << point_max.m if @factory.property(:has_m_coordinate)
+        @factory.polygon(@factory.linear_ring([point_min,
+                                               @factory.point(@max_x, @min_y, *extras), point_max,
+                                               @factory.point(@min_x, @max_y, *extras), point_min]))
       end
 
       # Returns true if this bounding box contains the given object,
@@ -278,7 +269,7 @@ module RGeo
       #   have M. Default is false.
 
       def contains?(rhs, opts = {})
-        return contains?(BoundingBox.new(@factory).add(rhs)) if Feature::Geometry === rhs
+        return contains?(BoundingBox.new(@factory).add(rhs), opts) if Feature::Geometry === rhs
 
         return true if rhs.empty?
 
@@ -353,12 +344,14 @@ module RGeo
           geometry.points.each { |p| add_point(p) }
         when Feature::Polygon
           geometry.exterior_ring.points.each { |p| add_point(p) }
+          # Interior rings may extend beyond the exterior ring in Z or M.
+          geometry.num_interior_rings.times { |i| add_geometry(geometry.interior_ring_n(i)) } if @has_z || @has_m
         when Feature::MultiPoint
           geometry.each { |p| add_point(p) }
         when Feature::MultiLineString
           geometry.each { |line| line.points.each { |p| add_point(p) } }
         when Feature::MultiPolygon
-          geometry.each { |poly| poly.exterior_ring.points.each { |p| add_point(p) } }
+          geometry.each { |poly| add_geometry(poly) }
         when Feature::GeometryCollection
           geometry.each { |g| add_geometry(g) }
         end

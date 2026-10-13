@@ -196,6 +196,8 @@ module RGeo
         # factory already computes envelopes with BoundingBox, so use it directly.
         source = factory.is_a?(Factory) ? geometry : geometry.envelope
         box = BoundingBox.new(factory, ignore_z: true, ignore_m: true).add_geometry(source)
+        return if box.empty?
+
         coordinates = [box.min_x, box.min_y, box.max_x, box.max_y]
         unless coordinates.all? { |coordinate| coordinate&.finite? }
           raise ArgumentError, "geometry must have finite XY bounds"

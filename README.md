@@ -93,8 +93,9 @@ requiring a native indexing dependency. The first successful insertion infers
 the Cartesian factory; subsequent inputs must use that same factory object.
 Queries on an empty tree do not bind a factory. No conversion or reprojection
 is performed. Empty geometry insertion is rejected; empty queries return an
-empty array. Z and M are ignored. `max_entries:` controls node capacity (an
-integer of at least 4, default 16); `size` includes duplicate entries.
+empty array, including collections containing only empty components. Z and M
+are ignored. `max_entries:` controls node capacity (an integer of at least 4,
+default 16); `size` includes duplicate entries.
 
 Results are unordered items whose bounding boxes intersect the query envelope,
 not exact geometry intersections or similarity matches. Compare candidates
